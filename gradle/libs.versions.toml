@@ -17,6 +17,7 @@ roomRxjava2 = "2.7.0"
 roomRxjava3 = "2.7.0"
 roomGuava = "2.7.0"
 roomPaging = "2.7.0"
+media3CommonKtx = "1.6.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -35,6 +36,7 @@ androidx-room-rxjava2 = { group = "androidx.room", name = "room-rxjava2", versio
 androidx-room-rxjava3 = { group = "androidx.room", name = "room-rxjava3", version.ref = "roomRxjava3" }
 androidx-room-guava = { group = "androidx.room", name = "room-guava", version.ref = "roomGuava" }
 androidx-room-paging = { group = "androidx.room", name = "room-paging", version.ref = "roomPaging" }
+androidx-media3-common-ktx = { group = "androidx.media3", name = "media3-common-ktx", version.ref = "media3CommonKtx" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
