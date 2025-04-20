@@ -1,6 +1,6 @@
 [versions]
 agp = "8.8.0"
-kotlin = "1.9.24"
+kotlin = "2.1.0"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -9,6 +9,14 @@ appcompat = "1.7.0"
 material = "1.12.0"
 activity = "1.10.1"
 constraintlayout = "2.2.1"
+androidxRoomGradlePlugin = "2.7.0"
+roomRuntime = "2.7.0"
+roomCompiler = "2.7.0"
+roomKtx = "2.7.0"
+roomRxjava2 = "2.7.0"
+roomRxjava3 = "2.7.0"
+roomGuava = "2.7.0"
+roomPaging = "2.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -19,6 +27,14 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+androidx-androidx-room-gradle-plugin = { group = "androidx.room", name = "androidx.room.gradle.plugin", version.ref = "androidxRoomGradlePlugin" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "roomRuntime" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "roomCompiler" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomKtx" }
+androidx-room-rxjava2 = { group = "androidx.room", name = "room-rxjava2", version.ref = "roomRxjava2" }
+androidx-room-rxjava3 = { group = "androidx.room", name = "room-rxjava3", version.ref = "roomRxjava3" }
+androidx-room-guava = { group = "androidx.room", name = "room-guava", version.ref = "roomGuava" }
+androidx-room-paging = { group = "androidx.room", name = "room-paging", version.ref = "roomPaging" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -6,4 +6,11 @@
     <string name="about">About</string>
     <string name="date">Senin, 14 April 2025</string>
     <string name="greeting">Halo, apa rencanamu hari ini?</string>
+    <string-array name="category_array">
+        <item>Pekerjaan</item>
+        <item>Pribadi</item>
+        <item>Belanja</item>
+        <item>Studi</item>
+        <item>Lainnya</item>
+    </string-array>
 </resources>
