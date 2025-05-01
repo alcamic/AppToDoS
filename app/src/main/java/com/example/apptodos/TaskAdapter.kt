@@ -6,11 +6,11 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import com.example.apptodos.databinding.ActivityLayoutTodoBinding // <-- Import the generated binding class
+import com.example.apptodos.databinding.ActivityLayoutTodoBinding
 import com.example.apptodos.room.Task
-import java.text.SimpleDateFormat // <-- Import for date formatting (example)
-import java.util.Locale // <-- Import for date formatting (example)
-import android.view.View // <-- Import View for visibility control
+import java.text.SimpleDateFormat
+import java.util.Locale
+import android.view.View
 import android.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import com.example.apptodos.room.Priority
@@ -20,18 +20,16 @@ enum class TaskAction {
 }
 
 class TaskAdapter (
-    private val onTaskCheckedChange: (task: Task) -> Unit, // Callback checkbox (sudah ada)
-    private val onTaskAction: (task: Task, action: TaskAction) -> Unit // Callback BARU untuk aksi menu
+    private val onTaskCheckedChange: (task: Task) -> Unit,
+    private val onTaskAction: (task: Task, action: TaskAction) -> Unit
 ) : RecyclerView.Adapter<TaskAdapter.TaskViewHolder>(){
 
     // Use plural 'tasks' for the list
     private var tasks: MutableList<Task> = mutableListOf()
 
-    // ViewHolder holds the binding object
     inner class TaskViewHolder(val binding: ActivityLayoutTodoBinding) : RecyclerView.ViewHolder(binding.root)
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TaskViewHolder {
-        // Inflate using the generated binding class
         val binding = ActivityLayoutTodoBinding.inflate(
             LayoutInflater.from(parent.context),
             parent,
@@ -40,7 +38,7 @@ class TaskAdapter (
         return TaskViewHolder(binding)
     }
 
-    // Implement getItemCount correctly
+
     override fun getItemCount(): Int {
         return tasks.size
     }
@@ -49,33 +47,31 @@ class TaskAdapter (
     override fun onBindViewHolder(holder: TaskViewHolder, position: Int) {
         val currentTask = tasks[position]
 
-        holder.binding.tvTitle.text = currentTask.title       // OK (title exists)
-        holder.binding.tvDescription.text = currentTask.description // OK (description exists)
+        holder.binding.tvTitle.text = currentTask.title
+        holder.binding.tvDescription.text = currentTask.description
 
-        // --- Use the correct property name 'dueDateTimeMillis' ---
-        if (currentTask.dueDateTimeMillis != null) { // <-- Use the correct name
-            // Using yyyy for year, adjust format as needed
+
+        if (currentTask.dueDateTimeMillis != null) {
             val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-            holder.binding.tvDueDate.text = sdf.format(currentTask.dueDateTimeMillis) // <-- Use the correct name
+            holder.binding.tvDueDate.text = sdf.format(currentTask.dueDateTimeMillis)
             holder.binding.tvDueDate.visibility = View.VISIBLE
         } else {
-            holder.binding.tvDueDate.visibility = View.GONE // Hide if no due date
+            holder.binding.tvDueDate.visibility = View.GONE
         }
-        // --- End of due date handling ---
+
 
         // Bind category
-        if (currentTask.category.isNullOrEmpty()) { // Check needed only if category could be empty, but it's non-nullable now.
-            holder.binding.tvCategory.visibility = View.GONE // Should not happen if category is never empty
+        if (currentTask.category.isNullOrEmpty()) {
+            holder.binding.tvCategory.visibility = View.GONE
         } else {
-            holder.binding.tvCategory.text = currentTask.category // OK (category exists)
+            holder.binding.tvCategory.text = currentTask.category
             holder.binding.tvCategory.visibility = View.VISIBLE
         }
 
 
-        // --- Handling Priority (Example) ---
-        // You need logic here to potentially change the priority indicator color based on currentTask.priority
+        // --- Handling Priority  ---
          val priorityColor = when (currentTask.priority) {
-            Priority.Tinggi -> ContextCompat.getColor(holder.itemView.context, R.color.priority_high) // Define these colors
+            Priority.Tinggi -> ContextCompat.getColor(holder.itemView.context, R.color.priority_high)
             Priority.Sedang -> ContextCompat.getColor(holder.itemView.context, R.color.priority_medium)
             Priority.Rendah -> ContextCompat.getColor(holder.itemView.context, R.color.priority_low)
          }
@@ -93,12 +89,11 @@ class TaskAdapter (
             holder.binding.cbDone.isEnabled = true
             holder.binding.cbDone.setOnCheckedChangeListener { _, isChecked ->
                     val updatedTask = currentTask.copy(isCompleted = isChecked)
-                    tasks[position] = updatedTask // Update list lokal
-                    onTaskCheckedChange(updatedTask) // Beri tahu Activity/VM -> DB
+                    tasks[position] = updatedTask
+                    onTaskCheckedChange(updatedTask)
 
-                    updateTaskAppearance(holder.binding, isChecked) // Update visual
+                    updateTaskAppearance(holder.binding, isChecked)
 
-                    // Langsung nonaktifkan setelah dicentang
                     if (isChecked) {
                         holder.binding.cbDone.isEnabled = false
                         holder.itemView.setOnClickListener(null)
@@ -116,10 +111,9 @@ class TaskAdapter (
     private fun showPopupMenu(anchorView: View, task: Task) {
         val context = anchorView.context
         val popup = PopupMenu(context, anchorView)
-        popup.menuInflater.inflate(R.menu.task_item_menu, popup.menu) // Inflate menu yg sudah tanpa toggle
+        popup.menuInflater.inflate(R.menu.task_item_menu, popup.menu)
 
         popup.setOnMenuItemClickListener { menuItem ->
-            // 3. Hapus case untuk toggle complete
             val action: TaskAction? = when (menuItem.itemId) {
                 R.id.action_edit_task -> TaskAction.EDIT
                 R.id.action_delete_task -> TaskAction.DELETE
@@ -150,6 +144,6 @@ class TaskAdapter (
     fun setData(newData: List<Task>) {
         this.tasks.clear()
         this.tasks.addAll(newData)
-        notifyDataSetChanged() // Consider DiffUtil later for better performance
+        notifyDataSetChanged()
     }
 }

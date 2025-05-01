@@ -11,7 +11,7 @@ import androidx.room.Update
 interface TaskDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun addTask(task: Task) // NO BODY HERE
+    suspend fun addTask(task: Task): Long// NO BODY HERE
 
     @Update
     suspend fun updateTask(task: Task) // NO BODY HERE
@@ -42,5 +42,8 @@ interface TaskDao {
 
     @Query("SELECT * FROM Task WHERE isCompleted = 0")
     suspend fun getUncompletedTasks(): List<Task>
+
+    @Query("SELECT COUNT(*) FROM task WHERE isCompleted = 0")
+    suspend fun getUncompletedTaskCount(): Int
 
 }
