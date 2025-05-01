@@ -17,5 +17,6 @@ data class Task (
     val description: String,
     val category: String,
     val priority: Priority,
-    val dueDateTimeMillis: Long?
+    val dueDateTimeMillis: Long?,
+    val isCompleted: Boolean
 )

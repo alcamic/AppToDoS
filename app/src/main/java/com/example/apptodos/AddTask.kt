@@ -152,7 +152,8 @@ class AddTask : AppCompatActivity() {
                 description = description,
                 category = category,
                 priority = selectedPriority,
-                dueDateTimeMillis = finalDueDateMillis
+                dueDateTimeMillis = finalDueDateMillis,
+                isCompleted = false
             )
             CoroutineScope(Dispatchers.IO).launch {
                 try {

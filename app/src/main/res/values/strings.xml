@@ -15,4 +15,10 @@
         <item>Studi</item>
         <item>Lainnya</item>
     </string-array>
+    <string name="task_summary_loading">Memuat tugas...</string>
+    <string name="task_summary_zero">Kamu tidak memiliki tugas yang harus diselesaikan.</string>
+    <plurals name="task_summary_plural">
+        <item quantity="one">Kamu memiliki %d tugas yang harus diselesaikan.</item>
+        <item quantity="other">Kamu memiliki %d tugas yang harus diselesaikan.</item>
+    </plurals>
 </resources>

@@ -22,7 +22,7 @@
             android:elevation="4dp"
             app:title="@string/app_name"
             app:titleTextColor="@android:color/white"
-            app:menu="@menu/menu_main" />
+             />
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -75,6 +75,7 @@
                     android:id="@+id/chipGroup"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    app:singleSelection="true"
                     android:layout_marginTop="8dp">
 
                     <com.google.android.material.chip.Chip
@@ -84,14 +85,19 @@
                         android:text="Semua"
                         android:checkable="true"
                         android:checked="true"
-                        app:chipBackgroundColor="@color/chip_background_color" />
+                        app:chipBackgroundColor="@color/chip_background_color"
+                        app:chipStrokeColor="@color/chip_outline_selector"
+                        app:chipStrokeWidth="1dp"
+                        />
 
                     <com.google.android.material.chip.Chip
-                        android:id="@+id/chipToday"
+                        android:id="@+id/chipUncompleted"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Hari ini"
+                        android:text="Belum Selesai"
                         android:checkable="true"
+                        app:chipStrokeColor="@color/chip_outline_selector"
+                        app:chipStrokeWidth="1dp"
                         app:chipBackgroundColor="@color/chip_background_color" />
 
                     <com.google.android.material.chip.Chip
@@ -100,6 +106,8 @@
                         android:layout_height="wrap_content"
                         android:text="Prioritas"
                         android:checkable="true"
+                        app:chipStrokeColor="@color/chip_outline_selector"
+                        app:chipStrokeWidth="1dp"
                         app:chipBackgroundColor="@color/chip_background_color" />
 
                     <com.google.android.material.chip.Chip
@@ -108,6 +116,8 @@
                         android:layout_height="wrap_content"
                         android:text="Selesai"
                         android:checkable="true"
+                        app:chipStrokeColor="@color/chip_outline_selector"
+                        app:chipStrokeWidth="1dp"
                         app:chipBackgroundColor="@color/chip_background_color" />
                 </com.google.android.material.chip.ChipGroup>
 
