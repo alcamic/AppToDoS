@@ -41,6 +41,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class AddTask : AppCompatActivity() {
@@ -61,18 +62,19 @@ class AddTask : AppCompatActivity() {
 
 
     private val dateFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+        .withLocale(Locale("id", "ID"))
     private val timeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+        .withLocale(Locale("id", "ID"))
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
             if (isGranted) {
                 Log.d("Permission", "Notification permission granted.")
                 Toast.makeText(this, "Izin notifikasi diberikan.", Toast.LENGTH_SHORT).show()
-                // Tidak perlu langsung schedule, biarkan logika save yg handle
             } else {
                 Log.w("Permission", "Notification permission denied.")
                 Toast.makeText(this, "Izin notifikasi ditolak. Pengingat tidak dapat diaktifkan.", Toast.LENGTH_LONG).show()
-                switchReminder.isChecked = false // Matikan switch jika izin ditolak
+                switchReminder.isChecked = false
             }
         }
 
@@ -106,35 +108,46 @@ class AddTask : AppCompatActivity() {
         }
     }
 
-    fun cancelReminder(context: Context, taskId: Int) {
-        val uniqueWorkName = "reminder_work_$taskId"
-        WorkManager.getInstance(context).cancelUniqueWork(uniqueWorkName)
-        Log.d("ReminderScheduler", "Reminder cancelled for task ID: $taskId")
+    fun cancelReminders(context: Context, taskId: Int) {
+        val tag = "reminder_$taskId"
+        WorkManager.getInstance(context).cancelAllWorkByTag(tag)
+        Log.d("ReminderScheduler", "All reminders cancelled for task ID: $taskId (Tag: $tag)")
     }
 
-    fun scheduleReminder(context: Context, taskId: Int, taskTitle: String, deadlineMillis: Long) {
-        val oneHourInMillis = TimeUnit.HOURS.toMillis(1)
-        val triggerTimeMillis = deadlineMillis - oneHourInMillis
-        val currentTimeMillis = System.currentTimeMillis()
-        val initialDelay = triggerTimeMillis - currentTimeMillis
+    fun scheduleReminders(context: Context, taskId: Int, taskTitle: String, deadlineMillis: Long) {
+        val reminderConfigs = listOf(
+            Pair(TimeUnit.HOURS.toMillis(1), "1 jam"),
+            Pair(TimeUnit.MINUTES.toMillis(30), "30 menit")
+        )
 
-        if (initialDelay > 0) {
-            val data = Data.Builder()
-                .putInt(ReminderWorker.KEY_TASK_ID, taskId)
-                .putString(ReminderWorker.KEY_TASK_TITLE, taskTitle)
-                .build()
-            val uniqueWorkName = "reminder_work_$taskId"
-            val reminderWorkRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
-                .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
-                .setInputData(data)
-                .addTag("reminder_$taskId")
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                uniqueWorkName, ExistingWorkPolicy.REPLACE, reminderWorkRequest
-            )
-            Log.d("ReminderScheduler", "Reminder scheduled for task ID: $taskId at $triggerTimeMillis")
-        } else {
-            Log.d("ReminderScheduler", "Reminder not scheduled for task ID: $taskId. Deadline invalid.")
+        for ((leadTimeMillis, leadTimeDescription) in reminderConfigs) {
+            val triggerTimeMillis = deadlineMillis - leadTimeMillis
+            val currentTimeMillis = System.currentTimeMillis()
+            val initialDelay = triggerTimeMillis - currentTimeMillis
+
+            if (initialDelay > 0) {
+                val data = Data.Builder()
+                    .putInt(ReminderWorker.KEY_TASK_ID, taskId)
+                    .putString(ReminderWorker.KEY_TASK_TITLE, taskTitle)
+                    .putString(ReminderWorker.KEY_LEAD_TIME_DESCRIPTION, leadTimeDescription)
+                    .build()
+
+                val uniqueWorkName = "reminder_work_${taskId}_${leadTimeMillis}"
+                val commonTag = "reminder_$taskId"
+
+                val reminderWorkRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
+                    .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
+                    .setInputData(data)
+                    .addTag(commonTag)
+                    .build()
+
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    uniqueWorkName, ExistingWorkPolicy.REPLACE, reminderWorkRequest
+                )
+                Log.d("ReminderScheduler", "Reminder ($leadTimeDescription) scheduled for task ID: $taskId at $triggerTimeMillis. WorkName: $uniqueWorkName")
+            } else {
+                Log.d("ReminderScheduler", "Reminder ($leadTimeDescription) not scheduled for task ID: $taskId. Deadline invalid or in the past for this lead time.")
+            }
         }
     }
 
@@ -151,7 +164,7 @@ class AddTask : AppCompatActivity() {
                         .setPositiveButton("Mengerti") { _, _ -> requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
                         .setNegativeButton("Batal") { dialog, _ ->
                             dialog.dismiss()
-                            switchReminder.isChecked = false // Matikan switch jika batal
+                            switchReminder.isChecked = false
                         }.show()
                     Log.w("Permission", "Showing rationale for notification permission.")
                 }
@@ -161,32 +174,43 @@ class AddTask : AppCompatActivity() {
                 }
             }
         } else {
-            Log.d("Permission", "No runtime notification permission needed.")
+            Log.d("Permission", "No runtime notification permission needed for this Android version.")
         }
     }
 
     private fun setupListener(){
+        switchReminder.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                if (selectedDate == null || selectedTime == null) {
+                    Toast.makeText(this, "Pilih tanggal dan waktu terlebih dahulu untuk mengaktifkan pengingat.", Toast.LENGTH_LONG).show()
+                    switchReminder.isChecked = false
+                    return@setOnCheckedChangeListener
+                }
+                checkAndRequestNotificationPermission()
+            }
+        }
         btnSelectDate.setOnClickListener {
             val calendar = Calendar.getInstance()
             val initialYear = selectedDate?.year ?: calendar.get(Calendar.YEAR)
             val initialMonth = selectedDate?.monthValue?.minus(1) ?: calendar.get(Calendar.MONTH)
             val initialDay = selectedDate?.dayOfMonth ?: calendar.get(Calendar.DAY_OF_MONTH)
 
-            switchReminder.setOnCheckedChangeListener { _, isChecked ->
-                if (isChecked) {
-                    checkAndRequestNotificationPermission()
-                }
-            }
-
             DatePickerDialog(this, { _, year, month, dayOfMonth ->
                 selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
                 btnSelectDate.text = selectedDate?.format(dateFormatter) ?: getString(R.string.pilih_tanggal)
+                if (switchReminder.isChecked && selectedTime == null) {
+                    Toast.makeText(this, "Jangan lupa pilih waktu untuk pengingat.", Toast.LENGTH_SHORT).show()
+                }
             }, initialYear, initialMonth, initialDay).apply {
-                datePicker.minDate = System.currentTimeMillis() - 1000
+                datePicker.minDate = Calendar.getInstance().timeInMillis
             }.show()
         }
 
         btnSelectTime.setOnClickListener {
+            if (selectedDate == null) {
+                Toast.makeText(this, "Pilih tanggal terlebih dahulu.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val calendar = Calendar.getInstance()
             val initialHour = selectedTime?.hour ?: calendar.get(Calendar.HOUR_OF_DAY)
             val initialMinute = selectedTime?.minute ?: calendar.get(Calendar.MINUTE)
@@ -194,19 +218,15 @@ class AddTask : AppCompatActivity() {
             TimePickerDialog(this, { _, hourOfDay, minute ->
                 selectedTime = LocalTime.of(hourOfDay, minute)
                 btnSelectTime.text = selectedTime?.format(timeFormatter) ?: getString(R.string.pilih_waktu)
-            }, initialHour, initialMinute, true // Format 24 jam
+            }, initialHour, initialMinute, true
             ).show()
         }
 
-
-        // Tambahkan validasi jika tanggal/waktu wajib
         btnSaveChanges.setOnClickListener {
-            // 1. Ambil data dari Input Fields
             val title = etTitle.text.toString().trim()
             val description = etDescription.text.toString().trim()
             val category = actvCategory.text.toString().trim()
 
-            // 2. Baca Prioritas dari RadioGroup
             val selectedPriorityId = rgPriority.checkedRadioButtonId
             val selectedPriority = when (selectedPriorityId) {
                 R.id.rbLow -> Priority.Rendah
@@ -215,43 +235,49 @@ class AddTask : AppCompatActivity() {
                 else -> Priority.Sedang
             }
 
+            if (title.isEmpty()) {
+                etTitle.error = "Judul tidak boleh kosong"; return@setOnClickListener
+            }
+            if (category.isEmpty()) {
+                actvCategory.error = "Kategori tidak boleh kosong"; Toast.makeText(this, "Pilih kategori", Toast.LENGTH_SHORT).show(); return@setOnClickListener
+            }
+            etTitle.error = null; actvCategory.error = null
+
+            if (switchReminder.isChecked && (selectedDate == null || selectedTime == null)) {
+                Toast.makeText(this, "Tanggal dan waktu harus dipilih untuk pengingat aktif.", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+
             var finalDueDateMillis: Long? = null
             if (selectedDate != null) {
                 val timeToUse = selectedTime ?: LocalTime.MIDNIGHT
-                val combinedLocalDateTime = LocalDateTime.of(selectedDate, timeToUse)
-
+                val combinedLocalDateTime = LocalDateTime.of(selectedDate!!, timeToUse)
                 try {
-                    val systemZoneId = ZoneId.systemDefault()
-                    val zonedDateTime = combinedLocalDateTime.atZone(systemZoneId)
-                    val instant = zonedDateTime.toInstant()
-                    finalDueDateMillis = instant.toEpochMilli()
+                    finalDueDateMillis = combinedLocalDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    Log.d("DateTimeSave", "Input: $combinedLocalDateTime | Zone: ${ZoneId.systemDefault()} | Saved Millis: $finalDueDateMillis")
 
-                    // Logging untuk verifikasi
-                    Log.d("DateTimeSave", "Input: $combinedLocalDateTime | Zone: $systemZoneId | Saved Millis: $finalDueDateMillis")
+                    // --- Validasi Waktu Deadline (Minimal 1 Jam dari Sekarang) ---
+                    val oneHourFromNowMillis = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1)
+                    if (finalDueDateMillis < oneHourFromNowMillis) {
+                        Toast.makeText(this, "Waktu deadline minimal harus 1 jam dari sekarang.", Toast.LENGTH_LONG).show()
+                        Log.w("TaskSave", "Validation failed: Deadline $finalDueDateMillis is not at least 1 hour from now.")
+                        return@setOnClickListener
+                    }
 
                 } catch (e: DateTimeException) {
                     Log.e("DateTimeSave", "Error konversi waktu lokal ke millis", e)
                     Toast.makeText(this, "Gagal memproses zona waktu.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
                 } catch (e: Exception) {
                     Log.e("DateTimeSave", "Error umum saat proses tanggal/waktu", e)
                     Toast.makeText(this, "Terjadi kesalahan tanggal/waktu.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
                 }
-            }
-
-            if (title.isEmpty()) {
-                etTitle.error = "Title tidak boleh kosong"; return@setOnClickListener
-            }
-            if (category.isEmpty()) {
-                actvCategory.error = "Kategori tidak boleh kosong"; Toast.makeText(
-                    this,
-                    "Pilih kategori",
-                    Toast.LENGTH_SHORT
-                ).show(); return@setOnClickListener
-            }
-            etTitle.error = null; actvCategory.error = null
-            if (selectedDate == null) {
-                Toast.makeText(this, "Pilih tanggal terlebih dahulu", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            } else {
+                if(switchReminder.isChecked) {
+                    Toast.makeText(this, "Tanggal diperlukan untuk pengingat aktif.", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
             }
 
             val taskToSave = Task(
@@ -264,50 +290,38 @@ class AddTask : AppCompatActivity() {
                 isCompleted = false
             )
             CoroutineScope(Dispatchers.IO).launch {
-                var newTaskId: Long = -1
+                var newTaskId: Long = -1L
                 try {
                     newTaskId = db.taskDao().addTask(taskToSave)
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@AddTask, "Task berhasil disimpan!", Toast.LENGTH_SHORT).show()
                         if (newTaskId > 0) {
+                            Toast.makeText(this@AddTask, "Tugas berhasil disimpan!", Toast.LENGTH_SHORT).show()
                             val reminderEnabled = switchReminder.isChecked
-                            val currentTaskTitle = title // Bisa ambil dari taskToSave.title
-                            val currentDeadline = finalDueDateMillis
-
-                            if (reminderEnabled && currentDeadline != null) {
+                            if (reminderEnabled && finalDueDateMillis != null) {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                                     ContextCompat.checkSelfPermission(this@AddTask, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                                    Toast.makeText(this@AddTask, "Izin notifikasi diperlukan untuk pengingat.", Toast.LENGTH_LONG).show()
-                                    Log.w("TaskSave", "Cannot schedule reminder for task $newTaskId: Notification permission not granted.")
-                                    // Tetap finish(), tapi reminder tidak terjadwal
+                                    Toast.makeText(this@AddTask, "Izin notifikasi diperlukan untuk pengingat. Pengingat tidak dijadwalkan.", Toast.LENGTH_LONG).show()
+                                    Log.w("TaskSave", "Cannot schedule reminders for task $newTaskId: Notification permission not granted.")
                                 } else {
-                                    scheduleReminder(applicationContext, newTaskId.toInt(), currentTaskTitle, currentDeadline)
+                                    scheduleReminders(applicationContext, newTaskId.toInt(), taskToSave.title, finalDueDateMillis)
                                 }
-                            } else {
-                                cancelReminder(applicationContext, newTaskId.toInt())
                             }
+                            finish()
                         } else {
-                            Log.e("TaskSave", "Failed to get valid ID after saving task. Reminder not scheduled.")
+                            Toast.makeText(this@AddTask, "Gagal menyimpan tugas, ID tidak valid.", Toast.LENGTH_LONG).show()
+                            Log.e("TaskSave", "Failed to save task or get valid ID. New Task ID: $newTaskId")
                         }
-
-                        finish()
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@AddTask, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                        e.printStackTrace()
+                        Toast.makeText(this@AddTask, "Error saat menyimpan: ${e.message}", Toast.LENGTH_LONG).show()
+                        Log.e("TaskSave", "Error saving task", e)
                     }
                 }
             }
-            Log.d("AddTask", "Save button clicked")
-            Log.d("AddTask", "Task data: $title, $description, $category, $selectedPriority")
-            Log.d("AddTask", "Date/Time: $selectedDate, $selectedTime")
         }
-
-
         btnCancel.setOnClickListener {
             finish()
         }
-
     }
 }

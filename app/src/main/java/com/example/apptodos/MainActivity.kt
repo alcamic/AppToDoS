@@ -16,7 +16,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.work.Data
+import androidx.work.Data // Tidak lagi dipakai langsung di MainActivity untuk schedule, tapi biarkan untuk referensi
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvTaskSummary: TextView
 
     companion object {
-        const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
+        const val EXTRA_TASK_ID = "EXTRA_TASK_ID" // Mungkin berguna jika notifikasi membuka detail tugas
     }
 
     private enum class FilterType {
@@ -58,14 +58,13 @@ class MainActivity : AppCompatActivity() {
         setupChipListeners()
         val tvDate = findViewById<TextView>(R.id.tvDate)
         val calendar = Calendar.getInstance()
-        val dateFormat = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.getDefault())
+        val dateFormat = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.getDefault()) // Format yyyy ditambahkan
         val formattedDate = dateFormat.format(calendar.time)
         tvDate.text = formattedDate
 
         createNotificationChannel()
-        tvDate.text = formattedDate
         setupRecyclerView()
-        loadTasks()
+        // loadTasks() tidak perlu dipanggil di sini karena onStart akan memanggil reloadDataBasedOnFilter()
     }
 
     private fun setupChipListeners() {
@@ -101,7 +100,7 @@ class MainActivity : AppCompatActivity() {
         chipCompleted.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 Log.i("ChipAction", "Filter: Selesai")
-                currentFilter = FilterType.COMPLETED // <-- Set Filter
+                currentFilter = FilterType.COMPLETED
                 loadCompletedTask()
             }
         }
@@ -123,10 +122,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelId = "task_reminder_channel"
+            val channelId = ReminderWorker.CHANNEL_ID // Gunakan konstanta dari ReminderWorker
             val name = "Pengingat Tugas"
             val descriptionText = "Notifikasi pengingat untuk tugas yang mendekati deadline"
-            val importance = NotificationManager.IMPORTANCE_HIGH // Prioritas notifikasi
+            val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel(channelId, name, importance).apply {
                 description = descriptionText
             }
@@ -137,99 +136,126 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun scheduleReminder(context: Context, taskId: Int, taskTitle: String, deadlineMillis: Long) {
-        val oneHourInMillis = TimeUnit.HOURS.toMillis(1)
-        val triggerTimeMillis = deadlineMillis - oneHourInMillis
-        val currentTimeMillis = System.currentTimeMillis()
-        val initialDelay = triggerTimeMillis - currentTimeMillis
+    // Fungsi scheduleReminders dan cancelReminders bisa dipusatkan di satu tempat (misal, Utility class)
+    // atau didefinisikan di setiap Activity yang membutuhkannya.
+    // Untuk saat ini, kita asumsikan AddTask yang utama menangani penjadwalan baru.
+    // Jika MainActivity (atau EditTask) perlu menjadwal ulang, fungsi serupa scheduleReminders
+    // dan cancelReminders dari AddTask perlu ada di sini juga atau diakses dari utility.
 
-        if (initialDelay > 0) {
-            val data = Data.Builder()
-                .putInt(ReminderWorker.KEY_TASK_ID, taskId)
-                .putString(ReminderWorker.KEY_TASK_TITLE, taskTitle)
-                .build()
+    fun cancelReminders(context: Context, taskId: Int) { // Diubah menjadi cancelReminders
+        val tag = "reminder_$taskId"
+        WorkManager.getInstance(context).cancelAllWorkByTag(tag)
+        Log.d("ReminderScheduler", "All reminders cancelled for task ID: $taskId (Tag: $tag) from MainActivity")
+    }
 
-            val uniqueWorkName = "reminder_work_$taskId"
+    // Fungsi scheduleReminders jika dibutuhkan di MainActivity (misal untuk edit)
+    // Harus identik atau serupa dengan yang di AddTask
+    fun scheduleReminders(context: Context, taskId: Int, taskTitle: String, deadlineMillis: Long) {
+        val reminderConfigs = listOf(
+            Pair(TimeUnit.HOURS.toMillis(1), "1 jam"),
+            Pair(TimeUnit.MINUTES.toMillis(30), "30 menit")
+        )
 
-            val reminderWorkRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
-                .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
-                .setInputData(data)
-                .addTag("reminder_$taskId")
-                .build()
+        for ((leadTimeMillis, leadTimeDescription) in reminderConfigs) {
+            val triggerTimeMillis = deadlineMillis - leadTimeMillis
+            val currentTimeMillis = System.currentTimeMillis()
+            val initialDelay = triggerTimeMillis - currentTimeMillis
 
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                uniqueWorkName,
-                ExistingWorkPolicy.REPLACE,
-                reminderWorkRequest
-            )
+            if (initialDelay > 0) {
+                val data = Data.Builder()
+                    .putInt(ReminderWorker.KEY_TASK_ID, taskId)
+                    .putString(ReminderWorker.KEY_TASK_TITLE, taskTitle)
+                    .putString(ReminderWorker.KEY_LEAD_TIME_DESCRIPTION, leadTimeDescription)
+                    .build()
 
-            Log.d("ReminderScheduler", "Reminder scheduled for task ID: $taskId at $triggerTimeMillis (Delay: $initialDelay ms)")
+                val uniqueWorkName = "reminder_work_${taskId}_${leadTimeMillis}"
+                val commonTag = "reminder_$taskId"
 
-        } else {
-            Log.d("ReminderScheduler", "Reminder not scheduled for task ID: $taskId. Deadline minus 1 hour is in the past.")
+                val reminderWorkRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
+                    .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
+                    .setInputData(data)
+                    .addTag(commonTag)
+                    .build()
+
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    uniqueWorkName, ExistingWorkPolicy.REPLACE, reminderWorkRequest
+                )
+                Log.d("ReminderScheduler", "Reminder ($leadTimeDescription) scheduled from MainActivity for task ID: $taskId at $triggerTimeMillis. WorkName: $uniqueWorkName")
+            } else {
+                Log.d("ReminderScheduler", "Reminder ($leadTimeDescription) not scheduled from MainActivity for task ID: $taskId. Deadline invalid or in the past.")
+            }
         }
     }
 
-    fun cancelReminder(context: Context, taskId: Int) {
-        val uniqueWorkName = "reminder_work_$taskId"
-        WorkManager.getInstance(context).cancelUniqueWork(uniqueWorkName)
-        Log.d("ReminderScheduler", "Reminder cancelled for task ID: $taskId (WorkName: $uniqueWorkName)")
-    }
 
     private fun handleTaskUpdateAndRefresh(task: Task) {
         CoroutineScope(Dispatchers.IO).launch {
-            // 1. Update Database
             db.taskDao().updateTask(task)
             Log.d("MainActivity", "Task ${task.id} updated in DB: isCompleted=${task.isCompleted}")
             if (task.isCompleted) {
-                cancelReminder(applicationContext, task.id)
+                cancelReminders(applicationContext, task.id) // Panggil cancelReminders
+            } else {
+                // Jika tugas di-uncheck dan ada deadline, jadwalkan ulang pengingat
+                // Ini memerlukan logika EditTask yang lebih kompleks untuk memperbarui deadline jika perlu
+                // Untuk sekarang, asumsikan jika di-uncheck, user mungkin akan mengeditnya untuk deadline baru
+                // atau pengingat yang ada (jika belum lewat) masih valid.
+                // Jika Anda ingin menjadwalkan ulang secara otomatis saat di-uncheck:
+                task.dueDateTimeMillis?.let { deadline ->
+                    if (deadline > System.currentTimeMillis()){ // Hanya jika deadline masih di masa depan
+                        // Anda mungkin perlu switch reminder status dari task jika ada
+                        Log.d("MainActivity", "Task ${task.id} un-completed, re-scheduling reminders if deadline is valid.")
+                        scheduleReminders(applicationContext, task.id, task.title, deadline)
+                    } else {
+                        // Jika deadline sudah lewat, batalkan pengingat yang mungkin masih ada
+                        cancelReminders(applicationContext, task.id)
+                    }
+                }
             }
 
-            // 2. Muat Ulang Data Sesuai Filter Aktif
-            Log.d("MainActivity", "Refreshing list for filter: $currentFilter")
-            when (currentFilter) {
-                FilterType.ALL -> loadTasks()
-                FilterType.UNCOMPLETED -> loadUncompletedTasks()
-                FilterType.PRIORITY -> loadPriorityTask() // Sama dg ALL jika asumsi benar
-                FilterType.COMPLETED -> loadCompletedTask()
+            // Muat ulang data berdasarkan filter saat ini
+            // Tidak perlu memanggil loadTasks dkk secara eksplisit di sini
+            // karena reloadDataBasedOnFilter() akan dipanggil saat kembali ke activity
+            // atau Anda bisa memanggilnya langsung jika ingin update instan tanpa menunggu onStart
+            withContext(Dispatchers.Main){
+                reloadDataBasedOnFilter()
             }
         }
     }
 
 
-        private fun loadCompletedTask() {
-            CoroutineScope(Dispatchers.IO).launch {
-                val tasks = db.taskDao().getCompletedTasks()
-                val uncompletedCount = db.taskDao().getUncompletedTaskCount() // <-- Ambil Count
-                Log.d("MainActivity", "Loading completed tasks. Uncompleted count: $uncompletedCount")
-                withContext(Dispatchers.Main) {
-                    taskAdapter.setData(tasks)
-                    updateTaskSummaryText(uncompletedCount) // <-- Update Teks Summary
-                }
+    private fun loadCompletedTask() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val tasks = db.taskDao().getCompletedTasks()
+            val uncompletedCount = db.taskDao().getUncompletedTaskCount()
+            Log.d("MainActivity", "Loading completed tasks. Uncompleted count: $uncompletedCount")
+            withContext(Dispatchers.Main) {
+                taskAdapter.setData(tasks)
+                updateTaskSummaryText(uncompletedCount)
             }
+        }
     }
 
-    private fun loadPriorityTask() { // Asumsi ini load semua, urut prioritas
+    private fun loadPriorityTask() {
         CoroutineScope(Dispatchers.IO).launch {
-            val tasks = db.taskDao().getPrioritySortedTasks() // Asumsi DAO method ada
-            val uncompletedCount = db.taskDao().getUncompletedTaskCount() // <-- Ambil Count
+            val tasks = db.taskDao().getPrioritySortedTasks()
+            val uncompletedCount = db.taskDao().getUncompletedTaskCount()
             Log.d("MainActivity", "Loading priority tasks. Uncompleted count: $uncompletedCount")
             withContext(Dispatchers.Main) {
                 taskAdapter.setData(tasks)
-                updateTaskSummaryText(uncompletedCount) // <-- Update Teks Summary
+                updateTaskSummaryText(uncompletedCount)
             }
         }
     }
 
 
-    private fun loadTasks() { // Asumsi ini load semua, urut prioritas
+    private fun loadTasks() {
         CoroutineScope(Dispatchers.IO).launch {
-            val tasks = db.taskDao().getAllTasks() // Asumsi DAO method ada dan sesuai
-            val uncompletedCount = db.taskDao().getUncompletedTaskCount() // <-- Ambil Count
+            val tasks = db.taskDao().getAllTasks()
+            val uncompletedCount = db.taskDao().getUncompletedTaskCount()
             Log.d("MainActivity", "Loading all tasks. Uncompleted count: $uncompletedCount")
             withContext(Dispatchers.Main) {
                 taskAdapter.setData(tasks)
-                updateTaskSummaryText(uncompletedCount) // <-- Update Teks Summary
+                updateTaskSummaryText(uncompletedCount)
             }
         }
     }
@@ -240,7 +266,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView(){
-        // Buat adapter dengan menyertakan callback untuk update task
         taskAdapter = TaskAdapter(
             onTaskCheckedChange = { task -> handleTaskUpdateAndRefresh(task) },
             onTaskAction = { task, action -> handleTaskItemAction(task, action) }
@@ -257,16 +282,14 @@ class MainActivity : AppCompatActivity() {
         Log.d("MainActivity", "Aksi diterima: $action untuk task '${task.title}' (ID: ${task.id})")
         when (action) {
             TaskAction.EDIT -> {
-                // TODO: Navigasi ke layar Edit Task
-                Log.i("MainActivity", "TODO: Buka layar Edit untuk task ID ${task.id}")
+                Log.i("MainActivity", "Membuka layar Edit untuk task ID ${task.id}")
                 val intent = Intent(this, EditTask::class.java)
                 intent.putExtra(EXTRA_TASK_ID, task.id)
-                 startActivity(intent)
+                startActivity(intent)
             }
             TaskAction.DELETE -> {
-                // TODO: Tampilkan dialog konfirmasi sebelum menghapus
-                Log.i("MainActivity", "TODO: Tampilkan konfirmasi hapus untuk task ID ${task.id}")
-                showDeleteConfirmationDialog(task) // Panggil fungsi dialog
+                Log.i("MainActivity", "Menampilkan konfirmasi hapus untuk task ID ${task.id}")
+                showDeleteConfirmationDialog(task)
             }
         }
     }
@@ -275,12 +298,11 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Hapus Tugas")
             .setMessage("Apakah Anda yakin ingin menghapus tugas '${task.title}'?")
-            .setIcon(android.R.drawable.ic_dialog_alert) // Icon standar
+            .setIcon(android.R.drawable.ic_dialog_alert)
             .setPositiveButton("Hapus") { _, _ ->
-                // Panggil fungsi untuk hapus dari database
                 deleteTaskFromDatabase(task)
             }
-            .setNegativeButton("Batal", null) // Tidak melakukan apa-apa jika batal
+            .setNegativeButton("Batal", null)
             .show()
     }
 
@@ -288,37 +310,34 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             db.taskDao().deleteTask(task)
             Log.d("MainActivity", "Task ID ${task.id} dihapus dari DB")
-            // Batalkan pengingat setelah task dihapus
-            cancelReminder(applicationContext, task.id)
-            // Muat ulang data
-            reloadDataBasedOnFilter()
+            cancelReminders(applicationContext, task.id)
+            withContext(Dispatchers.Main) {
+                reloadDataBasedOnFilter()
+            }
         }
     }
 
 
     private fun loadUncompletedTasks() {
         CoroutineScope(Dispatchers.IO).launch {
-            val tasks = db.taskDao().getUncompletedTasks() // Asumsi DAO method ada
-            // OPTIMASI: Jika kita sudah ambil HANYA yg belum selesai, jumlahnya adalah ukuran list itu sendiri
-            val uncompletedCount = tasks.size
-            // Alternatif (kurang efisien): val uncompletedCount = db.taskDao().getUncompletedTaskCount()
+            val tasks = db.taskDao().getUncompletedTasks()
+            val uncompletedCount = tasks.size // Bisa juga db.taskDao().getUncompletedTaskCount()
             Log.d("MainActivity", "Loading uncompleted tasks. Count: $uncompletedCount")
             withContext(Dispatchers.Main) {
                 taskAdapter.setData(tasks)
-                updateTaskSummaryText(uncompletedCount) // <-- Update Teks Summary
+                updateTaskSummaryText(uncompletedCount)
             }
         }
     }
     private fun updateTaskSummaryText(count: Int) {
         Log.d("MainActivity", "Updating summary text with count: $count")
         if (count > 0) {
-            // Format teks secara dinamis
             tvTaskSummary.text = "Kamu memiliki $count tugas yang harus diselesaikan"
-            tvTaskSummary.visibility = View.VISIBLE // Pastikan terlihat
+            tvTaskSummary.visibility = View.VISIBLE
         } else {
-            tvTaskSummary.text = "Yay! Tidak ada tugas yang harus diselesaikan." // Teks jika 0
-            // tvTaskSummary.visibility = View.GONE // Opsional: sembunyikan jika 0
+            tvTaskSummary.text = "Yay! Tidak ada tugas yang harus diselesaikan."
+
+            tvTaskSummary.visibility = View.VISIBLE
         }
     }
-
 }

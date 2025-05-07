@@ -11,7 +11,7 @@ import com.example.apptodos.room.Task
 import java.text.SimpleDateFormat
 import java.util.Locale
 import android.view.View
-import android.widget.PopupMenu
+import android.widget.PopupMenu // Pastikan PopupMenu diimpor dengan benar
 import androidx.core.content.ContextCompat
 import com.example.apptodos.room.Priority
 
@@ -24,7 +24,6 @@ class TaskAdapter (
     private val onTaskAction: (task: Task, action: TaskAction) -> Unit
 ) : RecyclerView.Adapter<TaskAdapter.TaskViewHolder>(){
 
-    // Use plural 'tasks' for the list
     private var tasks: MutableList<Task> = mutableListOf()
 
     inner class TaskViewHolder(val binding: ActivityLayoutTodoBinding) : RecyclerView.ViewHolder(binding.root)
@@ -38,11 +37,9 @@ class TaskAdapter (
         return TaskViewHolder(binding)
     }
 
-
     override fun getItemCount(): Int {
         return tasks.size
     }
-
 
     override fun onBindViewHolder(holder: TaskViewHolder, position: Int) {
         val currentTask = tasks[position]
@@ -50,17 +47,14 @@ class TaskAdapter (
         holder.binding.tvTitle.text = currentTask.title
         holder.binding.tvDescription.text = currentTask.description
 
-
         if (currentTask.dueDateTimeMillis != null) {
-            val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+            val sdf = SimpleDateFormat("dd MMM yy", Locale.getDefault())
             holder.binding.tvDueDate.text = sdf.format(currentTask.dueDateTimeMillis)
             holder.binding.tvDueDate.visibility = View.VISIBLE
         } else {
             holder.binding.tvDueDate.visibility = View.GONE
         }
 
-
-        // Bind category
         if (currentTask.category.isNullOrEmpty()) {
             holder.binding.tvCategory.visibility = View.GONE
         } else {
@@ -68,44 +62,45 @@ class TaskAdapter (
             holder.binding.tvCategory.visibility = View.VISIBLE
         }
 
-
-        // --- Handling Priority  ---
-         val priorityColor = when (currentTask.priority) {
+        val priorityColor = when (currentTask.priority) {
             Priority.Tinggi -> ContextCompat.getColor(holder.itemView.context, R.color.priority_high)
             Priority.Sedang -> ContextCompat.getColor(holder.itemView.context, R.color.priority_medium)
             Priority.Rendah -> ContextCompat.getColor(holder.itemView.context, R.color.priority_low)
-         }
-         holder.binding.viewPriorityIndicator.backgroundTintList = ColorStateList.valueOf(priorityColor)
+        }
+        holder.binding.viewPriorityIndicator.backgroundTintList = ColorStateList.valueOf(priorityColor)
 
         holder.binding.cbDone.setOnCheckedChangeListener(null)
         holder.binding.cbDone.isChecked = currentTask.isCompleted
 
         updateTaskAppearance(holder.binding, currentTask.isCompleted)
-        holder.itemView.isEnabled = true
+
         if (currentTask.isCompleted) {
             holder.binding.cbDone.isEnabled = false
             holder.itemView.setOnClickListener(null)
-        }else{
+        } else {
             holder.binding.cbDone.isEnabled = true
             holder.binding.cbDone.setOnCheckedChangeListener { _, isChecked ->
-                    val updatedTask = currentTask.copy(isCompleted = isChecked)
+                val updatedTask = currentTask.copy(isCompleted = isChecked)
+                if (position != RecyclerView.NO_POSITION && position < tasks.size) {
                     tasks[position] = updatedTask
-                    onTaskCheckedChange(updatedTask)
+                }
+                onTaskCheckedChange(updatedTask)
+                updateTaskAppearance(holder.binding, isChecked)
 
-                    updateTaskAppearance(holder.binding, isChecked)
 
-                    if (isChecked) {
-                        holder.binding.cbDone.isEnabled = false
-                        holder.itemView.setOnClickListener(null)
-                    }
+                if (isChecked) {
+                    holder.binding.cbDone.isEnabled = false
+                    holder.itemView.setOnClickListener(null)
                 }
             }
+
+        }
+
         holder.binding.ivMore.isEnabled = true
         holder.binding.ivMore.setOnClickListener { view ->
-            Log.d("AdapterAction", "Tombol More diklik untuk task: ${currentTask.title}")
+            Log.d("AdapterAction", "Tombol More diklik untuk task: ${currentTask.title}, isCompleted: ${currentTask.isCompleted}")
             showPopupMenu(view, currentTask)
         }
-        // TODO: Add click listeners if needed
     }
 
     private fun showPopupMenu(anchorView: View, task: Task) {
@@ -113,9 +108,20 @@ class TaskAdapter (
         val popup = PopupMenu(context, anchorView)
         popup.menuInflater.inflate(R.menu.task_item_menu, popup.menu)
 
+        if (task.isCompleted) {
+            val editMenuItem = popup.menu.findItem(R.id.action_edit_task)
+            editMenuItem?.isVisible = false
+            Log.d("PopupMenu", "Task '${task.title}' is completed. Edit option hidden.")
+        } else {
+            val editMenuItem = popup.menu.findItem(R.id.action_edit_task)
+            editMenuItem?.isVisible = true // Pastikan terlihat jika tugas belum selesai
+            Log.d("PopupMenu", "Task '${task.title}' is not completed. Edit option visible.")
+        }
+
+
         popup.setOnMenuItemClickListener { menuItem ->
             val action: TaskAction? = when (menuItem.itemId) {
-                R.id.action_edit_task -> TaskAction.EDIT
+                R.id.action_edit_task -> if (!task.isCompleted) TaskAction.EDIT else null // Double check
                 R.id.action_delete_task -> TaskAction.DELETE
                 else -> null
             }
@@ -140,7 +146,6 @@ class TaskAdapter (
         }
     }
 
-    // setData remains the same
     fun setData(newData: List<Task>) {
         this.tasks.clear()
         this.tasks.addAll(newData)
