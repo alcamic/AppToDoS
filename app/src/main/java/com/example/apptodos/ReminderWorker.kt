@@ -58,7 +58,7 @@ class ReminderWorker(appContext: Context, workerParams: WorkerParameters) :
 
             Log.d("ReminderWorker", "Building notification.")
             val builder = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_time)
                 .setContentTitle("Pengingat Tugas: $taskTitle")
                 // Gunakan leadTimeDescription di teks notifikasi
                 .setContentText("Tugas '$taskTitle' akan jatuh tempo dalam $leadTimeDescription.")

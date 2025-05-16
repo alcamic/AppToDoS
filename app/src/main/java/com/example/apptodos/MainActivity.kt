@@ -16,7 +16,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.work.Data // Tidak lagi dipakai langsung di MainActivity untuk schedule, tapi biarkan untuk referensi
+import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvTaskSummary: TextView
 
     companion object {
-        const val EXTRA_TASK_ID = "EXTRA_TASK_ID" // Mungkin berguna jika notifikasi membuka detail tugas
+        const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
     }
 
     private enum class FilterType {
@@ -64,7 +64,6 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
         setupRecyclerView()
-        // loadTasks() tidak perlu dipanggil di sini karena onStart akan memanggil reloadDataBasedOnFilter()
     }
 
     private fun setupChipListeners() {
@@ -136,20 +135,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Fungsi scheduleReminders dan cancelReminders bisa dipusatkan di satu tempat (misal, Utility class)
-    // atau didefinisikan di setiap Activity yang membutuhkannya.
-    // Untuk saat ini, kita asumsikan AddTask yang utama menangani penjadwalan baru.
-    // Jika MainActivity (atau EditTask) perlu menjadwal ulang, fungsi serupa scheduleReminders
-    // dan cancelReminders dari AddTask perlu ada di sini juga atau diakses dari utility.
-
-    fun cancelReminders(context: Context, taskId: Int) { // Diubah menjadi cancelReminders
+    fun cancelReminders(context: Context, taskId: Int) {
         val tag = "reminder_$taskId"
         WorkManager.getInstance(context).cancelAllWorkByTag(tag)
         Log.d("ReminderScheduler", "All reminders cancelled for task ID: $taskId (Tag: $tag) from MainActivity")
     }
-
-    // Fungsi scheduleReminders jika dibutuhkan di MainActivity (misal untuk edit)
-    // Harus identik atau serupa dengan yang di AddTask
     fun scheduleReminders(context: Context, taskId: Int, taskTitle: String, deadlineMillis: Long) {
         val reminderConfigs = listOf(
             Pair(TimeUnit.HOURS.toMillis(1), "1 jam"),
@@ -187,7 +177,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     private fun handleTaskUpdateAndRefresh(task: Task) {
         CoroutineScope(Dispatchers.IO).launch {
             db.taskDao().updateTask(task)
@@ -195,11 +184,6 @@ class MainActivity : AppCompatActivity() {
             if (task.isCompleted) {
                 cancelReminders(applicationContext, task.id) // Panggil cancelReminders
             } else {
-                // Jika tugas di-uncheck dan ada deadline, jadwalkan ulang pengingat
-                // Ini memerlukan logika EditTask yang lebih kompleks untuk memperbarui deadline jika perlu
-                // Untuk sekarang, asumsikan jika di-uncheck, user mungkin akan mengeditnya untuk deadline baru
-                // atau pengingat yang ada (jika belum lewat) masih valid.
-                // Jika Anda ingin menjadwalkan ulang secara otomatis saat di-uncheck:
                 task.dueDateTimeMillis?.let { deadline ->
                     if (deadline > System.currentTimeMillis()){ // Hanya jika deadline masih di masa depan
                         // Anda mungkin perlu switch reminder status dari task jika ada
@@ -212,16 +196,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // Muat ulang data berdasarkan filter saat ini
-            // Tidak perlu memanggil loadTasks dkk secara eksplisit di sini
-            // karena reloadDataBasedOnFilter() akan dipanggil saat kembali ke activity
-            // atau Anda bisa memanggilnya langsung jika ingin update instan tanpa menunggu onStart
             withContext(Dispatchers.Main){
                 reloadDataBasedOnFilter()
             }
         }
     }
-
 
     private fun loadCompletedTask() {
         CoroutineScope(Dispatchers.IO).launch {
@@ -248,7 +227,7 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun loadTasks() {
+        private fun loadTasks() {
         CoroutineScope(Dispatchers.IO).launch {
             val tasks = db.taskDao().getAllTasks()
             val uncompletedCount = db.taskDao().getUncompletedTaskCount()
@@ -316,7 +295,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
 
     private fun loadUncompletedTasks() {
         CoroutineScope(Dispatchers.IO).launch {
